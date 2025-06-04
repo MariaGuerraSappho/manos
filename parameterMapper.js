@@ -122,7 +122,11 @@ class ParameterMapper {
         this.clearMappings();
         
         // Always add volume mapping for hand proximity - this is dedicated and exclusive
-        this.addMapping('volume', 'volume', 'proximity');
+        /* @tweakable whether volume should be controlled by hand proximity */
+        const enableVolumeControl = true;
+        if (enableVolumeControl) {
+            this.addMapping('volume', 'volume', 'proximity');
+        }
         
         // Make sure we have at least one effect active
         const effectTypes = Object.keys(this.availableParameters).filter(type => type !== 'volume');
@@ -131,6 +135,7 @@ class ParameterMapper {
         // Low chaos = fewer effects, high chaos = more effects
         const minEffects = 2;
         const maxEffects = Math.min(7, effectTypes.length);
+        /* @tweakable number of effects to use based on chaos level */
         const randomEffectCount = Math.floor(minEffects + chaosLevel * (maxEffects - minEffects));
         
         // Randomly select effects to use

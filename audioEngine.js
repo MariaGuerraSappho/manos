@@ -418,6 +418,8 @@ class AudioEngine {
             await this.initialize();
         }
         
+        console.log(`Setting audio source to: ${sourceType}`);
+        
         // Prepare for transition - fade out current source
         if (this.playing && this.currentSource) {
             await this.fadeOut(0.2);
@@ -478,6 +480,7 @@ class AudioEngine {
             }
             
             // Connect to source node
+            console.log(`Connecting ${sourceType} source to audio chain`);
             this.currentSource.connect(this.sourceNode);
             
             // Update effect chain
@@ -608,6 +611,25 @@ class AudioEngine {
         }
     }
     
+    async startAudioContext() {
+        try {
+            // Start the audio context when user wants to play
+            await Tone.start();
+            
+            // Additional check to make sure context is actually running
+            if (Tone.context.state !== "running") {
+                console.warn("Audio context not running after Tone.start(), attempting to resume...");
+                await Tone.context.resume();
+            }
+            
+            console.log('Audio context started and confirmed running:', Tone.context.state);
+            return true;
+        } catch (error) {
+            console.error('Error starting audio context:', error);
+            return false;
+        }
+    }
+    
     updateEffectsChain() {
         // Disconnect everything
         this.sourceNode.disconnect();
@@ -648,17 +670,13 @@ class AudioEngine {
             // No effects, connect source directly to output
             this.sourceNode.connect(this.outputNode);
         }
-    }
-    
-    async startAudioContext() {
-        try {
-            // Start the audio context when user wants to play
-            await Tone.start();
-            console.log('Audio context started');
-            return true;
-        } catch (error) {
-            console.error('Error starting audio context:', error);
-            return false;
+        
+        console.log(`Effects chain updated with ${this.effectsChain.length} effects`);
+        
+        // Ensure master gain is connected to destination
+        if (!this.masterGain.connected) {
+            this.masterGain.toDestination();
+            console.log("Reconnected master gain to destination");
         }
     }
     
@@ -688,6 +706,10 @@ class AudioEngine {
         if (this.playing) return true;
         
         try {
+            // Make sure we have valid routing before playing
+            console.log(`Playing audio source: ${this.sourceType}`);
+            console.log(`Effects chain has ${this.effectsChain.length} effects`);
+            
             switch (this.sourceType) {
                 case 'noise':
                     this.noise.start();
@@ -707,6 +729,13 @@ class AudioEngine {
             }
             
             this.playing = true;
+            
+            // Double-check that master gain is not at zero
+            if (this.masterGain.gain.value === 0) {
+                console.log("Master gain was at zero, resetting to 1");
+                this.masterGain.gain.rampTo(1, 0.1);
+            }
+            
             return true;
         } catch (e) {
             console.error('Error playing audio:', e);

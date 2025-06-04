@@ -615,7 +615,7 @@ class ManosApp {
         this.updatePerformanceMappingsDisplay();
     }
 
-    enterPerformanceMode() {
+    async enterPerformanceMode() {
         // Stop any volume tests
         this.stopAllVolumeTests();
         
@@ -629,22 +629,48 @@ class ManosApp {
         
         // Create random mappings based on chaos level
         const chaosSlider = document.getElementById('chaos-level');
+        /* @tweakable amount of randomness in effect mappings (0-100) */
         const chaosLevel = chaosSlider ? parseInt(chaosSlider.value) / 100 : 0.5;
         
-        // Create new random mappings based on the chaos level, but ensure volume mapping is kept
         // Store baseline volume before recreating mappings
+        /* @tweakable baseline volume level in dB */
         const baselineVolume = this.audioEngine.baselineVolume;
         console.log("Entering performance mode with baseline volume:", baselineVolume);
         
-        this.parameterMapper.createRandomMappings(undefined, chaosLevel);
-        this.updatePerformanceMappingsDisplay();
-        
-        // Ensure the baseline volume is preserved after entering performance mode
-        this.audioEngine.setBaselineVolume(baselineVolume);
-        console.log("After mapping creation, baseline volume:", this.audioEngine.baselineVolume);
+        // Ensure audio is ready for performance mode
+        try {
+            // Make sure the audio context is started explicitly when entering performance mode
+            await this.audioEngine.startAudioContext();
+            
+            // Create new random mappings based on the chaos level
+            this.parameterMapper.createRandomMappings(undefined, chaosLevel);
+            this.updatePerformanceMappingsDisplay();
+            
+            // Ensure the baseline volume is preserved after entering performance mode
+            this.audioEngine.setBaselineVolume(baselineVolume);
+            console.log("After mapping creation, baseline volume:", this.audioEngine.baselineVolume);
+            
+            // Reconnect all audio nodes to ensure proper routing
+            if (this.audioEngine.sourceType) {
+                await this.audioEngine.setSource(this.audioEngine.sourceType);
+            } else {
+                await this.audioEngine.setSource('noise');
+            }
+            
+            // If we were playing in setup mode, make sure we're still playing
+            if (this.audioEngine.playing) {
+                await this.audioEngine.play();
+            }
+        } catch (error) {
+            console.error("Error initializing audio for performance mode:", error);
+        }
     }
 
     exitPerformanceMode() {
+        // Store current audio state
+        const wasPlaying = this.audioEngine.playing;
+        const currentSource = this.audioEngine.sourceType;
+        
         // Move video container back to setup
         const setupVideo = document.querySelector('#setup-mode .video-container');
         const performanceVideo = document.querySelector('#performance-mode .video-container');
@@ -664,6 +690,21 @@ class ManosApp {
         // Update buttons
         this.updateSourceButtons(this.appState.audioSource);
         this.updatePlayStopButtons(this.audioEngine.playing);
+        
+        // Ensure audio keeps playing if it was playing before
+        if (wasPlaying) {
+            setTimeout(async () => {
+                try {
+                    await this.audioEngine.startAudioContext();
+                    if (currentSource) {
+                        await this.audioEngine.setSource(currentSource);
+                    }
+                    await this.audioEngine.play();
+                } catch (error) {
+                    console.error("Error restoring audio after exiting performance mode:", error);
+                }
+            }, 100);
+        }
     }
 
     async nextAudioFileWithFade() {
