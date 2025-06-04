@@ -1,0 +1,168 @@
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manos by Maria Sappho</title>
+    <link rel="stylesheet" href="styles.css">
+    <!-- Import Maps for modules -->
+    <script type="importmap">
+    {
+      "imports": {
+        "tone": "https://cdn.skypack.dev/tone@14.8.49"
+      }
+    }
+    </script>
+</head>
+<body>
+    <div class="app-container">
+        <header>
+            <h1>Manos</h1>
+        </header>
+        
+        <main>
+            <!-- Setup mode controls -->
+            <div id="setup-mode" class="mode-container active">
+                <div class="setup-layout">
+                    <!-- Video container moved here from main level -->
+                    <div class="video-container">
+                        <video id="webcam" autoplay playsinline></video>
+                        <canvas id="overlay"></canvas>
+                        <div class="hand-status">Hand tracking: <span id="tracking-status">Initializing...</span></div>
+                        <div id="effect-feedback" class="effect-feedback"></div>
+                        <div id="gesture-feedback" class="gesture-feedback"></div>
+                        <div id="video-permission" class="permission-prompt">
+                            <p>Please enable camera access to use hand tracking</p>
+                            <button id="enable-camera">Enable Camera</button>
+                        </div>
+                    </div>
+                    
+                    <div class="controls-container">
+                        <div class="source-controls">
+                            <h2>Audio Source</h2>
+                            <div class="source-buttons">
+                                <button id="noise-btn" class="source-btn">Pink Noise</button>
+                                <button id="mic-btn" class="source-btn">Microphone</button>
+                                <button id="file-btn" class="source-btn">Upload Files</button>
+                                <input type="file" id="audio-upload" accept="audio/*" multiple style="display: none;">
+                            </div>
+                            <div id="file-browser" class="file-browser hidden">
+                                <h3>Uploaded Files</h3>
+                                <div id="file-list"></div>
+                            </div>
+                            <div class="device-selectors">
+                                <div class="selector-group">
+                                    <label for="mic-select">Microphone:</label>
+                                    <select id="mic-select" disabled>
+                                        <option value="">Loading microphones...</option>
+                                    </select>
+                                </div>
+                                <div class="selector-group">
+                                    <label for="output-select">Audio Output:</label>
+                                    <select id="output-select" disabled>
+                                        <option value="">Loading speakers...</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <!-- Baseline volume control -->
+                            <div class="volume-control">
+                                <h3>Baseline Volume</h3>
+                                <p>Hold your hand at a comfortable distance and adjust the volume slider until you hear sound at your preferred level.</p>
+                                <button id="test-tone-btn" class="control-btn">Play Test Tone</button>
+                                <input type="range" id="baseline-volume" class="volume-slider" min="-30" max="6" value="-10" step="1">
+                                <div id="volume-display">-10 dB</div>
+                                <div id="volume-test-status" class="volume-test-status">
+                                    Adjust the slider while listening to the test tone to set your preferred baseline volume
+                                </div>
+                            </div>
+                            
+                            <div class="playback-controls">
+                                <button id="play-btn" class="control-btn">Play</button>
+                                <button id="stop-btn" class="control-btn">Stop</button>
+                            </div>
+                            <div id="setup-stopped-indicator" class="stopped-indicator visible">Audio stopped. Press Play to enable hand control.</div>
+                        </div>
+                        
+                        <div class="start-performance-container">
+                            <button id="start-performance-btn" class="start-performance-btn">START PERFORMANCE</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Performance mode controls -->
+            <div id="performance-mode" class="mode-container">
+                <div class="performance-layout">
+                    <!-- Video container cloned for performance mode -->
+                    <div class="video-container">
+                        <!-- These elements will be moved from setup to performance via JS, not duplicated -->
+                    </div>
+                    
+                    <div class="performance-controls">
+                        <div class="performance-source-controls">
+                            <h3>Audio Source</h3>
+                            <div class="performance-source-buttons">
+                                <button id="performance-noise-btn" class="source-btn">Pink Noise</button>
+                                <button id="performance-mic-btn" class="source-btn">Microphone</button>
+                                <button id="performance-file-btn" class="source-btn">Audio Files</button>
+                            </div>
+                            
+                            <div id="performance-file-controls" class="performance-file-controls">
+                                <button id="performance-next-file-btn" class="control-btn">Next File</button>
+                            </div>
+                            
+                            <!-- New Chaos Control -->
+                            <div class="chaos-control">
+                                <h3>Chaos Level</h3>
+                                <input type="range" id="chaos-level" class="chaos-slider" min="0" max="100" value="50" step="5">
+                                <div class="chaos-labels">
+                                    <span>Harmonic</span>
+                                    <span>Chaotic</span>
+                                </div>
+                            </div>
+                            
+                            <div class="performance-effect-buttons">
+                                <button id="performance-randomize-btn">Randomize Effects</button>
+                                <button id="performance-save-btn">Save Settings</button>
+                            </div>
+                            
+                            <div class="performance-playback-controls">
+                                <button id="performance-play-btn" class="control-btn">Play</button>
+                                <button id="performance-stop-btn" class="control-btn">Stop</button>
+                            </div>
+                            <div id="performance-stopped-indicator" class="stopped-indicator visible">Audio stopped. Press Play to enable hand control.</div>
+                        </div>
+                        
+                        <div class="performance-effects-display">
+                            <h3>Active Effects</h3>
+                            <!-- For displaying current mappings -->
+                            <div id="performance-active-mappings"></div>
+                            <div id="performance-effects-list" class="performance-effects-list"></div>
+                        </div>
+                        
+                        <button id="exit-performance-btn" class="exit-performance-btn">EXIT PERFORMANCE</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+        
+        <footer>
+            <p>Created by Maria Sappho | <span id="device-status">Optimized for desktop and iPad</span></p>
+            <div class="gesture-help">
+                <p>Move your hands to control audio effects - Effects will display in the video preview</p>
+                <p><strong>Volume Control:</strong> Move hand closer/further from camera</p>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Load MediaPipe Hands -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    
+    <!-- Load application scripts -->
+    <script src="js/handTracking.js" type="module"></script>
+    <script src="js/audioEngine.js" type="module"></script>
+    <script src="js/parameterMapper.js" type="module"></script>
+    <script src="js/main.js" type="module"></script>
+</body>
+</html>
