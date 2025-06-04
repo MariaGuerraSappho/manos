@@ -267,7 +267,8 @@ class ParameterMapper {
         
         if (!handData || !this.audioEngine.playing) {
             // Hand not present or audio not playing, use baseline volume
-            this.audioEngine.setEffectParameter('volume', 'volume', this.audioEngine.baselineVolume);
+            const baselineVolume = this.audioEngine.baselineVolume;
+            this.audioEngine.setEffectParameter('volume', 'volume', baselineVolume);
             
             // Gradually fade out all sounds if no hand is detected
             this.audioEngine.fadeOutAll();
@@ -282,19 +283,15 @@ class ParameterMapper {
             // Always get baseline volume directly from audio engine (single source of truth)
             const baselineVolume = this.audioEngine.baselineVolume;
             
-            // Add debug log to verify we're using the correct baseline volume
-            console.log('Hand control using baselineVolume:', baselineVolume);
+            // Define how far user can go above and below baseline - increased range
+            const maxAbove = 12;    // +12 dB above baseline (hand far)
+            const maxBelow = -40;   // -40 dB below baseline (hand close)
 
-            // Define how far user can go above and below baseline
-            const maxAbove = 12;     // +12 dB above baseline (hand far)
-            const maxBelow = -50;   // -50 dB below baseline (hand close)
-
-            // Enhance proximity mapping with improved curve for more obvious volume changes
+            // Enhanced proximity mapping with improved curve for more obvious volume changes
             // Map proximity: 0 = close (min), 0.5 = baseline, 1 = far (max)
             let volumeValue;
             if (proximity < 0.5) {
                 // Apply a curve to make smaller movements near the baseline more noticeable
-                // Use quadratic curve instead of linear
                 const percent = (proximity / 0.5) ** 1.5; // Steeper curve 
                 volumeValue = baselineVolume + (maxBelow * (1 - percent));
             } else {
@@ -306,12 +303,12 @@ class ParameterMapper {
             // More aggressive smoothing for cleaner transitions
             const mappingKey = `${volumeMapping.effectType}-${volumeMapping.effectParameter}`;
             const previousVolume = this.previousValues[mappingKey] ?? baselineVolume;
-            const smoothingFactor = 0.85; // Higher smoothing factor (was 0.75)
+            const smoothingFactor = 0.85; // Higher smoothing factor
             volumeValue = previousVolume * smoothingFactor + volumeValue * (1 - smoothingFactor);
             this.previousValues[mappingKey] = volumeValue;
 
             // Ensure volume is within safe limits
-            volumeValue = Math.min(Math.max(volumeValue, -40), 12);
+            volumeValue = Math.min(Math.max(volumeValue, -60), 12);
             
             this.audioEngine.setEffectParameter('volume', 'volume', volumeValue);
 
@@ -395,7 +392,7 @@ class ParameterMapper {
             this.audioEngine.setEffectParameter(mapping.effectType, mapping.effectParameter, scaledValue);
         }
         
-        // Make sure volume uses proximity only
+        // Make sure we fade in if a hand is present
         this.audioEngine.fadeInAll();
     }
     

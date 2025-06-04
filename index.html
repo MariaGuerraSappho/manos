@@ -31,8 +31,9 @@
                         <div id="effect-feedback" class="effect-feedback"></div>
                         <div id="gesture-feedback" class="gesture-feedback"></div>
                         <div id="video-permission" class="permission-prompt">
-                            <p>Please enable camera access to use hand tracking</p>
-                            <button id="enable-camera">Enable Camera</button>
+                            <p>Please allow camera and microphone access to use this app</p>
+                            <p>This app needs camera access for hand tracking and microphone for audio input.</p>
+                            <button id="enable-camera">Enable Camera & Microphone</button>
                         </div>
                     </div>
                     
@@ -67,8 +68,12 @@
                             <!-- Baseline volume control -->
                             <div class="volume-control">
                                 <h3>Baseline Volume</h3>
-                                <p>Hold your hand at a comfortable distance and adjust the volume slider until you hear sound at your preferred level.</p>
-                                <button id="test-tone-btn" class="control-btn">Play Test Tone</button>
+                                <p>Set your preferred volume when your hand is at a comfortable distance from the camera.</p>
+                                <div class="test-volume-controls">
+                                    <button id="test-tone-btn" class="control-btn">Play Test Tone</button>
+                                    <button id="test-min-volume-btn" class="control-btn">Test Minimum</button>
+                                    <button id="test-max-volume-btn" class="control-btn">Test Maximum</button>
+                                </div>
                                 <input type="range" id="baseline-volume" class="volume-slider" min="-30" max="6" value="-10" step="1">
                                 <div id="volume-display">-10 dB</div>
                                 <div id="volume-test-status" class="volume-test-status">

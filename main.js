@@ -60,6 +60,9 @@ class ManosApp {
 
     async initialize() {
         try {
+            // Request permissions immediately when app loads
+            await this.requestPermissions();
+            
             await this.audioEngine.initialize();
             await this.handTracker.initialize();
             this.handTracker.setHandUpdateCallback(this.onHandUpdate.bind(this));
@@ -70,6 +73,7 @@ class ManosApp {
             this.updateActiveEffectsList();
             
             // Ensure a default source is always set
+            await this.audioEngine.startAudioContext();
             await this.audioEngine.setSource('noise');
             this.appState.audioSource = 'noise';
             this.updateSourceButtons('noise');
@@ -77,6 +81,14 @@ class ManosApp {
             this.loadSavedSettingsList();
             this.initialized = true;
             this.checkDeviceType();
+
+            // Initialize volume display
+            const volumeSlider = document.getElementById('baseline-volume');
+            const volumeDisplay = document.getElementById('volume-display');
+            if (volumeSlider && volumeDisplay) {
+                volumeDisplay.textContent = `${volumeSlider.value} dB`;
+                this.audioEngine.setBaselineVolume(volumeSlider.value);
+            }
 
             // Camera enable button
             const enableCameraBtn = document.getElementById('enable-camera');
@@ -86,29 +98,8 @@ class ManosApp {
                 });
             }
 
-            // Test tone button
-            const testToneBtn = document.getElementById('test-tone-btn');
-            if (testToneBtn) {
-                testToneBtn.addEventListener('click', async () => {
-                    if (testToneBtn.textContent === "Play Test Tone") {
-                        await this.audioEngine.startAudioContext();
-                        await this.audioEngine.startTestTone();
-                        testToneBtn.textContent = "Stop Test Tone";
-                        testToneBtn.classList.add('active');
-                        
-                        // Auto-start the volume test mode
-                        const volumeTestStatus = document.getElementById('volume-test-status');
-                        if (volumeTestStatus) {
-                            volumeTestStatus.textContent = 'Adjust the slider to set your preferred baseline volume';
-                            volumeTestStatus.classList.add('testing');
-                        }
-                    } else {
-                        this.audioEngine.stopTestTone();
-                        testToneBtn.textContent = "Play Test Tone";
-                        testToneBtn.classList.remove('active');
-                    }
-                });
-            }
+            // Set up volume test buttons
+            this.setupVolumeTestControls();
 
             // Fix randomize button in performance mode
             if (document.getElementById('performance-randomize-btn')) {
@@ -123,6 +114,119 @@ class ManosApp {
             }
         } catch (error) {
             console.error('Error initializing Manos app:', error);
+        }
+    }
+    
+    setupVolumeTestControls() {
+        const testToneBtn = document.getElementById('test-tone-btn');
+        const testMinVolumeBtn = document.getElementById('test-min-volume-btn');
+        const testMaxVolumeBtn = document.getElementById('test-max-volume-btn');
+        const volumeSlider = document.getElementById('baseline-volume');
+        const volumeDisplay = document.getElementById('volume-display');
+        const volumeTestStatus = document.getElementById('volume-test-status');
+        
+        // Test tone button for normal volume
+        if (testToneBtn) {
+            testToneBtn.addEventListener('click', async () => {
+                if (testToneBtn.textContent === "Play Test Tone") {
+                    // Stop any other test modes
+                    this.stopAllVolumeTests();
+                    
+                    // Start baseline test tone
+                    await this.audioEngine.startAudioContext();
+                    await this.audioEngine.startTestTone();
+                    testToneBtn.textContent = "Stop Test Tone";
+                    testToneBtn.classList.add('active');
+                    
+                    volumeTestStatus.textContent = 'Adjust the slider to set your preferred baseline volume';
+                    volumeTestStatus.classList.add('testing');
+                } else {
+                    this.audioEngine.stopTestTone();
+                    testToneBtn.textContent = "Play Test Tone";
+                    testToneBtn.classList.remove('active');
+                    volumeTestStatus.classList.remove('testing');
+                }
+            });
+        }
+        
+        // Test minimum volume button
+        if (testMinVolumeBtn) {
+            testMinVolumeBtn.addEventListener('click', async () => {
+                if (!testMinVolumeBtn.classList.contains('active')) {
+                    // Stop any other test modes
+                    this.stopAllVolumeTests();
+                    
+                    // Start minimum volume test
+                    await this.audioEngine.startAudioContext();
+                    await this.audioEngine.startTestToneWithOffset(-40); // Minimum volume
+                    testMinVolumeBtn.classList.add('active');
+                    
+                    volumeTestStatus.textContent = 'Testing minimum volume (hand very close to camera)';
+                    volumeTestStatus.classList.add('testing');
+                } else {
+                    this.audioEngine.stopTestTone();
+                    testMinVolumeBtn.classList.remove('active');
+                    volumeTestStatus.classList.remove('testing');
+                }
+            });
+        }
+        
+        // Test maximum volume button
+        if (testMaxVolumeBtn) {
+            testMaxVolumeBtn.addEventListener('click', async () => {
+                if (!testMaxVolumeBtn.classList.contains('active')) {
+                    // Stop any other test modes
+                    this.stopAllVolumeTests();
+                    
+                    // Start maximum volume test
+                    await this.audioEngine.startAudioContext();
+                    await this.audioEngine.startTestToneWithOffset(12); // Maximum volume
+                    testMaxVolumeBtn.classList.add('active');
+                    
+                    volumeTestStatus.textContent = 'Testing maximum volume (hand far from camera)';
+                    volumeTestStatus.classList.add('testing');
+                } else {
+                    this.audioEngine.stopTestTone();
+                    testMaxVolumeBtn.classList.remove('active');
+                    volumeTestStatus.classList.remove('testing');
+                }
+            });
+        }
+        
+        // Volume slider
+        if (volumeSlider && volumeDisplay) {
+            volumeSlider.addEventListener('input', (e) => {
+                const value = e.target.value;
+                volumeDisplay.textContent = `${value} dB`;
+                this.audioEngine.setBaselineVolume(value);
+                console.log('Slider set:', value, 'audioEngine.baselineVolume:', this.audioEngine.baselineVolume);
+            });
+        }
+    }
+    
+    stopAllVolumeTests() {
+        const testToneBtn = document.getElementById('test-tone-btn');
+        const testMinVolumeBtn = document.getElementById('test-min-volume-btn');
+        const testMaxVolumeBtn = document.getElementById('test-max-volume-btn');
+        const volumeTestStatus = document.getElementById('volume-test-status');
+        
+        this.audioEngine.stopTestTone();
+        
+        if (testToneBtn) {
+            testToneBtn.textContent = "Play Test Tone";
+            testToneBtn.classList.remove('active');
+        }
+        
+        if (testMinVolumeBtn) {
+            testMinVolumeBtn.classList.remove('active');
+        }
+        
+        if (testMaxVolumeBtn) {
+            testMaxVolumeBtn.classList.remove('active');
+        }
+        
+        if (volumeTestStatus) {
+            volumeTestStatus.classList.remove('testing');
         }
     }
 
@@ -203,6 +307,19 @@ class ManosApp {
             }
         });
         window.addEventListener('resize', () => this.checkDeviceType());
+
+        // Baseline volume slider
+        const volumeSlider = document.getElementById('baseline-volume');
+        const volumeDisplay = document.getElementById('volume-display');
+        
+        if (volumeSlider && volumeDisplay) {
+            volumeSlider.addEventListener('input', (e) => {
+                const value = e.target.value;
+                volumeDisplay.textContent = `${value} dB`;
+                this.audioEngine.setBaselineVolume(value);
+                console.log('Slider set:', value, 'audioEngine.baselineVolume:', this.audioEngine.baselineVolume);
+            });
+        }
     }
 
     async selectSource(sourceType) {
@@ -499,6 +616,9 @@ class ManosApp {
     }
 
     enterPerformanceMode() {
+        // Stop any volume tests
+        this.stopAllVolumeTests();
+        
         // Switch to performance mode
         this.setupModeContainer.classList.remove('active');
         this.performanceModeContainer.classList.add('active');
@@ -520,6 +640,7 @@ class ManosApp {
         this.updatePerformanceMappingsDisplay();
         
         // Ensure the baseline volume is preserved after entering performance mode
+        this.audioEngine.setBaselineVolume(baselineVolume);
         console.log("After mapping creation, baseline volume:", this.audioEngine.baselineVolume);
     }
 
@@ -588,6 +709,23 @@ class ManosApp {
             deviceStatus.textContent = 'Optimized for tablet';
         } else {
             deviceStatus.textContent = 'Optimized for desktop';
+        }
+    }
+
+    async requestPermissions() {
+        try {
+            // Proactively request camera and microphone permissions
+            await navigator.mediaDevices.getUserMedia({ 
+                video: true, 
+                audio: true 
+            });
+            console.log('Initial permissions granted');
+            return true;
+        } catch (error) {
+            console.error('Initial permission request failed:', error);
+            // We'll still continue with app initialization
+            // Individual components will handle their own permission requests
+            return false;
         }
     }
 }

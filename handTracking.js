@@ -59,8 +59,9 @@ class HandTracker {
             this.requestCameraPermission();
         });
         
-        // Try to start camera
-        await this.requestCameraPermission();
+        // Proactively request camera permission on initialization
+        // Don't await here - let it run in parallel
+        this.requestCameraPermission();
         
         // Set up resize handler
         this.resizeCanvas();
@@ -69,6 +70,23 @@ class HandTracker {
     
     async requestCameraPermission() {
         try {
+            // First ensure permissions are granted
+            try {
+                // Explicitly request both camera and microphone permissions
+                await navigator.mediaDevices.getUserMedia({ 
+                    video: true, 
+                    audio: true 
+                });
+                console.log('Camera and microphone permissions granted');
+            } catch (permError) {
+                console.error('Permission error:', permError);
+                // Show permission prompt with more visible styling
+                this.permissionPrompt.classList.remove('hidden');
+                this.permissionPrompt.style.backgroundColor = 'rgba(255, 105, 180, 0.9)';
+                this.statusElement.textContent = 'Permission needed';
+                return false;
+            }
+            
             // Setup camera
             const cameraOptions = {
                 onFrame: async () => {

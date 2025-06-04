@@ -63,6 +63,15 @@ class AudioEngine {
         // Don't start the audio context yet - wait for user interaction
         console.log('Audio engine initialized - waiting for user interaction');
         
+        // Request microphone permission early (doesn't start the stream yet)
+        try {
+            await navigator.mediaDevices.getUserMedia({ audio: true });
+            console.log('Microphone permission granted during initialization');
+        } catch (err) {
+            console.warn('Initial microphone permission not granted:', err);
+            // Continue anyway - we'll request again when needed
+        }
+        
         // Initialize effects
         this.initializeEffects();
         
@@ -271,12 +280,12 @@ class AudioEngine {
         }
     }
     
-    setupDeviceSelectionListeners() {
+    async setupDeviceSelectionListeners() {
         const micSelect = document.getElementById('mic-select');
         const outputSelect = document.getElementById('output-select');
         
         // Microphone selection change
-        micSelect.addEventListener('change', async (e) => {
+        micSelect?.addEventListener('change', async (e) => {
             const deviceId = e.target.value;
             if (deviceId && deviceId !== this.currentMicrophoneId) {
                 this.currentMicrophoneId = deviceId;
@@ -291,13 +300,14 @@ class AudioEngine {
         });
         
         // Output selection change - completely revised implementation
-        outputSelect.addEventListener('change', async (e) => {
+        outputSelect?.addEventListener('change', async (e) => {
             const deviceId = e.target.value;
             if (deviceId && deviceId !== this.currentOutputId) {
                 this.currentOutputId = deviceId;
                 
                 // Store if we were playing
                 const wasPlaying = this.playing;
+                const currentVolume = this.effects.volume.volume.value;
                 
                 // Stop audio if it's playing
                 if (wasPlaying) {
@@ -310,61 +320,68 @@ class AudioEngine {
                     // First, ensure the audio context is running
                     await Tone.start();
                     
-                    // Try different approaches to set the output device
-                    
-                    // Method 1: Use Tone.getDestination().output
-                    if (Tone.getDestination && typeof Tone.getDestination === 'function') {
-                        const destination = Tone.getDestination();
-                        console.log('Tone destination:', destination);
-                        
-                        if (destination && destination.output && typeof destination.output.setSinkId === 'function') {
-                            await destination.output.setSinkId(deviceId);
-                            console.log('Successfully changed output using Tone.getDestination().output');
-                        } else {
-                            console.log('Tone.getDestination().output.setSinkId not available');
-                        }
-                    }
-                    
-                    // Method 2: Try direct context access
-                    if (Tone.context && Tone.context.destination && typeof Tone.context.destination.setSinkId === 'function') {
-                        await Tone.context.destination.setSinkId(deviceId);
-                        console.log('Successfully changed output using Tone.context.destination');
-                    } else {
-                        console.log('Tone.context.destination.setSinkId not available');
-                    }
-                    
-                    // Method 3: Create a dummy audio element as a fallback
+                    // Create a dummy audio element to test setSinkId support
                     const audio = document.createElement('audio');
                     if (audio && typeof audio.setSinkId === 'function') {
-                        await audio.setSinkId(deviceId);
-                        console.log('Successfully changed output using audio element fallback');
-                        
-                        // This is just a hint that the browser supports setSinkId
-                        // We need to restart the audio context for Tone.js to pick up the change
-                        if (Tone.context) {
-                            await Tone.context.close();
-                            Tone.context = new Tone.Context();
-                            await Tone.start();
-                            console.log('Restarted Tone.js audio context to apply output device change');
+                        try {
+                            // Test if we can set the sink ID
+                            await audio.setSinkId(deviceId);
+                            console.log('Audio element setSinkId test successful');
+                            
+                            // Try to apply the sink ID to the Tone.js context
+                            try {
+                                if (Tone.context && Tone.context.destination && 
+                                    typeof Tone.context.destination.setSinkId === 'function') {
+                                    await Tone.context.destination.setSinkId(deviceId);
+                                    console.log('Set sink ID on Tone context destination');
+                                } else {
+                                    console.log('Tone context destination setSinkId not available, using alternate method');
+                                    
+                                    // Restart Tone.js context with the new device
+                                    await Tone.context.close();
+                                    await Tone.start();
+                                    
+                                    // Create a new Audio context with the specified sink ID
+                                    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                                    if (audioContext.setSinkId) {
+                                        await audioContext.setSinkId(deviceId);
+                                        console.log('Set sink ID on new AudioContext');
+                                    }
+                                    
+                                    // Update Tone.js to use this context
+                                    Tone.setContext(audioContext);
+                                }
+                            } catch (ctxError) {
+                                console.warn('Error setting sink ID on Tone context:', ctxError);
+                            }
+                            
+                        } catch (sinkError) {
+                            console.error('Error testing setSinkId:', sinkError);
+                            
+                            // Try the modern browser selection API
+                            if (navigator.mediaDevices && typeof navigator.mediaDevices.selectAudioOutput === 'function') {
+                                try {
+                                    await navigator.mediaDevices.selectAudioOutput();
+                                    console.log('User selected output device via browser dialog');
+                                } catch (selectError) {
+                                    console.warn('Error with selectAudioOutput:', selectError);
+                                }
+                            }
                         }
                     } else {
-                        console.log('Audio element setSinkId not available');
-                    }
-                    
-                    // Method 4: Try modern browser API if available
-                    if (typeof navigator.mediaDevices.selectAudioOutput === 'function') {
-                        const device = await navigator.mediaDevices.selectAudioOutput();
-                        console.log('User selected output device:', device);
-                    } else {
-                        console.log('navigator.mediaDevices.selectAudioOutput not available');
+                        // Alert user that their browser doesn't support this feature
+                        console.warn('Browser does not support setSinkId');
+                        alert('Your browser does not fully support changing audio output devices. ' +
+                              'Try using the latest version of Chrome or Edge for this feature.');
                     }
                     
                     // Restart audio if it was playing
                     if (wasPlaying) {
+                        // Slight delay to allow the audio context to stabilize
                         setTimeout(() => {
-                            console.log('Restarting audio playback after output device change');
+                            this.effects.volume.volume.value = currentVolume;
                             this.play();
-                        }, 500); // Small delay to ensure device switch completes
+                        }, 300);
                     }
                     
                 } catch (error) {
@@ -377,21 +394,19 @@ class AudioEngine {
                         errorMessage += 'Permission denied. Please grant permission to access audio devices.';
                     } else if (error.name === 'NotFoundError') {
                         errorMessage += 'The selected audio output device was not found.';
-                    } else if (error.message && error.message.includes('setSinkId')) {
-                        errorMessage += 'Your browser may not fully support changing audio outputs. ';
-                        errorMessage += 'Try these steps:\n';
-                        errorMessage += '1. Go to chrome://flags/#enable-webrtc-hide-local-ips-with-mdns and set to Disabled\n';
-                        errorMessage += '2. Make sure chrome://settings/content/sound allows this site\n';
-                        errorMessage += '3. Restart your browser';
                     } else {
-                        errorMessage += 'Please check your audio devices and browser permissions.';
+                        errorMessage += 'Please check your audio devices and browser permissions. ' +
+                                      'Make sure you\'re using a recent version of Chrome or Edge.';
                     }
                     
                     alert(errorMessage);
                     
                     // Restart audio anyway if it was playing
                     if (wasPlaying) {
-                        setTimeout(() => this.play(), 500);
+                        setTimeout(() => {
+                            this.effects.volume.volume.value = currentVolume;
+                            this.play();
+                        }, 300);
                     }
                 }
             }
@@ -762,9 +777,30 @@ class AudioEngine {
     async startTestTone() {
         await this.startAudioContext();
         if (this.testTone.state !== "started") {
+            // Make sure we're using the baseline volume
+            this.effects.volume.volume.value = this.baselineVolume;
+            
             this.testTone.start();
             this.testTone.connect(this.effects.volume);
             this.effects.volume.connect(this.masterGain);
+            this.masterGain.gain.value = 1; // Ensure master gain is at full
+            this.masterGain.toDestination();
+            return true;
+        }
+        return false;
+    }
+    
+    async startTestToneWithOffset(offset) {
+        await this.startAudioContext();
+        if (this.testTone.state !== "started") {
+            // Apply the offset to baseline volume
+            const testVolume = this.baselineVolume + offset;
+            this.effects.volume.volume.value = testVolume;
+            
+            this.testTone.start();
+            this.testTone.connect(this.effects.volume);
+            this.effects.volume.connect(this.masterGain);
+            this.masterGain.gain.value = 1; // Ensure master gain is at full
             this.masterGain.toDestination();
             return true;
         }
@@ -774,6 +810,8 @@ class AudioEngine {
     stopTestTone() {
         if (this.testTone.state === "started") {
             this.testTone.stop();
+            // Restore the baseline volume after testing
+            this.effects.volume.volume.value = this.baselineVolume;
             return true;
         }
         return false;
@@ -886,7 +924,7 @@ class AudioEngine {
             this.effects.volume.volume.value = value;
         } else {
             // Otherwise just store the value for hand-controlled mapping
-            this.effects.volume.volume.value = value;
+            // Volume will be applied by the mapper on next hand update
         }
         
         // Make sure master gain is at full to hear the volume change

@@ -186,15 +186,27 @@ main {
     font-weight: normal;
 }
 
-.volume-control #test-tone-btn {
+.test-volume-controls {
+    display: flex;
+    gap: 8px;
     margin-bottom: 15px;
-    width: 100%;
-    background-color: var(--primary-color);
+    flex-wrap: wrap;
+}
+
+.test-volume-controls .control-btn {
+    flex: 1;
+    min-width: 100px;
 }
 
 .volume-control #test-tone-btn.active {
     background-color: var(--accent-color);
     box-shadow: 0 0 8px var(--accent-color);
+}
+
+.volume-control #test-min-volume-btn.active,
+.volume-control #test-max-volume-btn.active {
+    background-color: var(--primary-dark);
+    box-shadow: 0 0 8px var(--primary-dark);
 }
 
 .volume-slider {
@@ -427,6 +439,44 @@ main {
 @keyframes fade-in {
     from { opacity: 0; }
     to { opacity: 1; }
+}
+
+.permission-prompt {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 20px;
+    border-radius: var(--card-radius);
+    text-align: center;
+    z-index: 100;
+    max-width: 80%;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+    border: 2px solid var(--primary-color);
+}
+
+.permission-prompt p {
+    margin-bottom: 15px;
+}
+
+.permission-prompt button {
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 25px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 1.1em;
+    transition: all 0.2s;
+    margin-top: 10px;
+}
+
+.permission-prompt button:hover {
+    background-color: var(--primary-dark);
+    transform: scale(1.05);
 }
 
 /* Footer */
