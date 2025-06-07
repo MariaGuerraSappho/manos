@@ -285,6 +285,15 @@ class ManosApp {
                 this.parameterMapper.setChaosLevel(chaosLevel);
             });
         }
+
+        // Dry/wet mix handler
+        const dryWetSlider = document.getElementById('dry-wet');
+        if (dryWetSlider) {
+            dryWetSlider.addEventListener('input', (e) => {
+                const mix = parseInt(e.target.value) / 100;
+                this.audioEngine.setDryWet(mix);
+            });
+        }
         
         this.performanceNextFileButton?.addEventListener('click', () => {
             this.nextAudioFileWithFade();
@@ -636,6 +645,13 @@ class ManosApp {
         /* @tweakable baseline volume level in dB */
         const baselineVolume = this.audioEngine.baselineVolume;
         console.log("Entering performance mode with baseline volume:", baselineVolume);
+
+        // Apply initial dry/wet value from slider
+        const dryWetSlider = document.getElementById('dry-wet');
+        if (dryWetSlider) {
+            const mix = parseInt(dryWetSlider.value) / 100;
+            this.audioEngine.setDryWet(mix);
+        }
         
         // Ensure audio is ready for performance mode
         try {

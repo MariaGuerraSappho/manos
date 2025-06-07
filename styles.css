@@ -295,6 +295,41 @@ main {
     color: var(--primary-dark);
 }
 
+/* Dry/wet slider */
+.drywet-control {
+    margin: 20px 0;
+    padding: 15px;
+    background-color: var(--secondary-color);
+    border-radius: var(--card-radius);
+    border: 1px solid var(--primary-light);
+}
+
+.drywet-control h3 {
+    color: var(--primary-dark);
+    margin-bottom: 10px;
+}
+
+.drywet-slider {
+    width: 100%;
+    height: 8px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: linear-gradient(to right, var(--primary-light), var(--accent-color));
+    outline: none;
+    border-radius: 4px;
+}
+
+.drywet-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--primary-color);
+    cursor: pointer;
+    border: 2px solid white;
+}
+
 /* Performance mode styles */
 .performance-controls {
     background-color: var(--secondary-color);
