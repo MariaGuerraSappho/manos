@@ -398,9 +398,9 @@ class HandTracker {
         );
         
         const segment2 = Math.sqrt(
-            Math.pow(joint2Point.x - joint1Point.x, 2) + 
-            Math.pow(joint2Point.y - joint1Point.y, 2) + 
-            Math.pow(joint2Point.z - joint2Point.z, 2)
+            Math.pow(joint2Point.x - joint1Point.x, 2) +
+            Math.pow(joint2Point.y - joint1Point.y, 2) +
+            Math.pow(joint2Point.z - joint1Point.z, 2)
         );
         
         const segment3 = Math.sqrt(
