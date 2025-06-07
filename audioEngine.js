@@ -54,6 +54,11 @@ class AudioEngine {
         
         // Baseline volume
         this.baselineVolume = -10;
+
+        // Dry/wet control
+        this.crossFade = null;
+        this.postVolumeGain = null;
+        this.dryWet = 0.5;
         
         // Hand presence flag
         this.handPresent = false;
@@ -78,10 +83,14 @@ class AudioEngine {
         // Initialize sources
         this.initializeSources();
         
-        // Set up default routing with master gain node
+        // Set up default routing with master gain node and crossfade for dry/wet control
         this.masterGain = new Tone.Gain(1);
         this.sourceNode = new Tone.Gain();
+        this.postVolumeGain = new Tone.Gain();
+        this.crossFade = new Tone.CrossFade(this.dryWet);
         this.outputNode = new Tone.Gain();
+
+        this.crossFade.connect(this.outputNode);
         this.outputNode.connect(this.masterGain);
         this.masterGain.toDestination();
 
@@ -631,46 +640,51 @@ class AudioEngine {
     }
     
     updateEffectsChain() {
-        // Disconnect everything
+        // Disconnect existing routing
         this.sourceNode.disconnect();
         this.effectsChain.forEach(effect => effect.disconnect());
+        this.postVolumeGain.disconnect();
+        this.crossFade.a.disconnect();
+        this.crossFade.b.disconnect();
         this.effectsChain = [];
-        
-        // Always add compressor at the beginning of the chain to prevent clipping
-        this.effectsChain.push(this.effects.compressor);
-        
-        // Add volume to the chain
-        this.effectsChain.push(this.effects.volume);
-        
-        // Filter active effects
+
+        // Common preprocessing: compressor -> volume
+        this.sourceNode.connect(this.effects.compressor);
+        this.effects.compressor.connect(this.effects.volume);
+        this.effects.volume.connect(this.postVolumeGain);
+
+        // Dry path
+        this.postVolumeGain.connect(this.crossFade.a);
+
+        // Build wet chain starting from postVolumeGain
+        let inputNode = this.postVolumeGain;
+
         for (const key in this.effects) {
-            if (key === 'volume' || key === 'compressor') continue; // Skip already added effects
-            
-            if (this.effects[key].wet && this.effects[key].wet.value > 0) {
-                this.effectsChain.push(this.effects[key]);
-            } else if (key === 'filter' || key === 'eq' || key === 'panner') {
-                // Always include these effects in the chain
-                this.effectsChain.push(this.effects[key]);
+            if (key === 'compressor' || key === 'volume') continue;
+
+            const effect = this.effects[key];
+            const alwaysInclude = key === 'filter' || key === 'eq' || key === 'panner';
+
+            if (effect.wet && effect.wet.value > 0 || alwaysInclude) {
+                this.effectsChain.push(effect);
             }
         }
-        
-        // Create the chain
+
         if (this.effectsChain.length > 0) {
-            // Connect source to first effect
-            this.sourceNode.connect(this.effectsChain[0]);
-            
-            // Connect effects in sequence
+            // Connect effects sequentially
+            inputNode.connect(this.effectsChain[0]);
             for (let i = 0; i < this.effectsChain.length - 1; i++) {
                 this.effectsChain[i].connect(this.effectsChain[i + 1]);
             }
-            
-            // Connect last effect to output
-            this.effectsChain[this.effectsChain.length - 1].connect(this.outputNode);
+            this.effectsChain[this.effectsChain.length - 1].connect(this.crossFade.b);
         } else {
-            // No effects, connect source directly to output
-            this.sourceNode.connect(this.outputNode);
+            // No extra effects, connect straight to crossfade
+            inputNode.connect(this.crossFade.b);
         }
-        
+
+        // Connect crossfade output to audio chain
+        this.crossFade.connect(this.outputNode);
+
         console.log(`Effects chain updated with ${this.effectsChain.length} effects`);
         
         // Ensure master gain is connected to destination
@@ -961,6 +975,14 @@ class AudioEngine {
         
         console.log('Baseline volume set to:', value);
     }
+
+    setDryWet(value) {
+        // value expected 0..1
+        this.dryWet = Math.max(0, Math.min(1, value));
+        if (this.crossFade) {
+            this.crossFade.fade.value = this.dryWet;
+        }
+    }
     
     fadeOutAll() {
         // Clear any existing fade timer
@@ -998,6 +1020,8 @@ class AudioEngine {
         // Clean up all audio nodes
         if (this.sourceNode) this.sourceNode.dispose();
         if (this.outputNode) this.outputNode.dispose();
+        if (this.postVolumeGain) this.postVolumeGain.dispose();
+        if (this.crossFade) this.crossFade.dispose();
         
         // Clean up sources
         if (this.noise) this.noise.dispose();
