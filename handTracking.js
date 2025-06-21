@@ -18,6 +18,10 @@ class HandTracker {
         this.velocity = Array(21).fill().map(() => ({ x: 0, y: 0, z: 0 }));
         this.acceleration = Array(21).fill().map(() => ({ x: 0, y: 0, z: 0 }));
         
+        // Camera devices
+        this.availableCameras = [];
+        this.currentCameraId = '';
+        
         // Smoothing parameters
         this.smoothingFactor = 0.7; // Higher value = more smoothing
         this.smoothedLandmarks = null;
@@ -38,56 +42,128 @@ class HandTracker {
     }
     
     async initialize() {
-        // Setup MediaPipe Hands using the global variable
-        this.hands = new window.Hands({
-            locateFile: (file) => {
-                return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
-            }
-        });
-        
-        this.hands.setOptions({
-            maxNumHands: 1,
-            modelComplexity: 1,
-            minDetectionConfidence: 0.5,
-            minTrackingConfidence: 0.5
-        });
-        
-        this.hands.onResults(this.onResults.bind(this));
-        
-        // Set up camera permission button
-        this.enableCameraButton.addEventListener('click', () => {
-            this.requestCameraPermission();
-        });
-        
-        // Proactively request camera permission on initialization
-        // Don't await here - let it run in parallel
-        this.requestCameraPermission();
-        
-        // Set up resize handler
-        this.resizeCanvas();
-        window.addEventListener('resize', this.resizeCanvas.bind(this));
-    }
-    
-    async requestCameraPermission() {
         try {
-            // First ensure permissions are granted
-            try {
-                // Explicitly request both camera and microphone permissions
-                await navigator.mediaDevices.getUserMedia({ 
-                    video: true, 
-                    audio: true 
-                });
-                console.log('Camera and microphone permissions granted');
-            } catch (permError) {
-                console.error('Permission error:', permError);
-                // Show permission prompt with more visible styling
-                this.permissionPrompt.classList.remove('hidden');
-                this.permissionPrompt.style.backgroundColor = 'rgba(255, 105, 180, 0.9)';
-                this.statusElement.textContent = 'Permission needed';
+            console.log('Initializing hand tracker...');
+            
+            // Check if MediaPipe is loaded
+            if (!window.Hands) {
+                console.error('MediaPipe Hands not loaded. Check script tags.');
                 return false;
             }
             
-            // Setup camera
+            // Setup MediaPipe Hands using the global variable
+            this.hands = new window.Hands({
+                locateFile: (file) => {
+                    return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+                }
+            });
+            
+            this.hands.setOptions({
+                maxNumHands: 1,
+                modelComplexity: 1,
+                minDetectionConfidence: 0.5,
+                minTrackingConfidence: 0.5
+            });
+            
+            this.hands.onResults(this.onResults.bind(this));
+            
+            // Make sure video element exists
+            if (!this.videoElement) {
+                console.error('Video element not found');
+                return false;
+            }
+            
+            // Set up camera permission button
+            if (this.enableCameraButton) {
+                this.enableCameraButton.addEventListener('click', () => {
+                    this.requestCameraPermission();
+                });
+            }
+            
+            // Enumerate available cameras
+            await this.enumerateCameras();
+            
+            // Try to start camera
+            await this.requestCameraPermission();
+            
+            // Set up resize handler
+            this.resizeCanvas();
+            window.addEventListener('resize', this.resizeCanvas.bind(this));
+            
+            return true;
+        } catch (error) {
+            console.error('Error initializing hand tracker:', error);
+            return false;
+        }
+    }
+    
+    async enumerateCameras() {
+        try {
+            // Request permissions first to ensure we get all labeled devices
+            await navigator.mediaDevices.getUserMedia({ video: true });
+            
+            // Get all media devices
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            
+            // Filter for video input devices (cameras)
+            this.availableCameras = devices.filter(device => device.kind === 'videoinput');
+            
+            // Populate camera selection dropdown
+            this.populateCameraSelector();
+            
+            return true;
+        } catch (error) {
+            console.error('Error enumerating cameras:', error);
+            return false;
+        }
+    }
+    
+    populateCameraSelector() {
+        const cameraSelect = document.getElementById('camera-select');
+        if (!cameraSelect) return;
+        
+        // Clear existing options
+        cameraSelect.innerHTML = '';
+        
+        // Add camera options
+        if (this.availableCameras.length > 0) {
+            this.availableCameras.forEach(camera => {
+                const option = document.createElement('option');
+                option.value = camera.deviceId;
+                option.text = camera.label || `Camera ${camera.deviceId.slice(0, 5)}`;
+                cameraSelect.appendChild(option);
+            });
+            
+            // Enable the select element
+            cameraSelect.disabled = false;
+            
+            // Set default camera
+            this.currentCameraId = this.availableCameras[0].deviceId;
+            
+            // Set up change listener
+            cameraSelect.addEventListener('change', async (e) => {
+                const deviceId = e.target.value;
+                if (deviceId && deviceId !== this.currentCameraId) {
+                    this.currentCameraId = deviceId;
+                    
+                    // Restart camera with new device
+                    if (this.camera) {
+                        this.camera.stop();
+                    }
+                    await this.requestCameraPermission();
+                }
+            });
+        } else {
+            const option = document.createElement('option');
+            option.value = '';
+            option.text = 'No cameras found';
+            cameraSelect.appendChild(option);
+        }
+    }
+
+    async requestCameraPermission() {
+        try {
+            // Setup camera with the selected device if available
             const cameraOptions = {
                 onFrame: async () => {
                     await this.hands.send({ image: this.videoElement });
@@ -95,6 +171,16 @@ class HandTracker {
                 width: 640,
                 height: 480
             };
+            
+            // Add deviceId constraint if we have a selected camera
+            if (this.currentCameraId) {
+                cameraOptions.deviceId = { exact: this.currentCameraId };
+            }
+            
+            // Stop existing camera if running
+            if (this.camera) {
+                this.camera.stop();
+            }
             
             this.camera = new window.Camera(this.videoElement, cameraOptions);
             await this.camera.start();
@@ -316,17 +402,16 @@ class HandTracker {
         );
         
         // Enhanced proximity calculation for better volume control
-        // Use more linear scaling with soft limits for more predictable response
         const rawProximity = handSize * 5;
-        // Apply gentler scaling for smoother response
-        // Using a sigmoid-like curve for smooth transitions at extremes
-        const proximity = 1 / (1 + Math.exp(-6 * (rawProximity - 0.5)));
+        // Apply more aggressive scaling to make it more responsive
+        const proximity = Math.min(Math.max(Math.pow(rawProximity, 2), 0), 1);
         
         // Calculate finger curl by comparing fingertips to palm
         const thumbCurl = this.calculateFingerCurl(1, 2, 3, 4);
         const indexCurl = this.calculateFingerCurl(5, 6, 7, 8);
         const middleCurl = this.calculateFingerCurl(9, 10, 11, 12);
         const ringCurl = this.calculateFingerCurl(13, 14, 15, 16);
+        const pinkyCurl = this.calculateFingerCurl(17, 18, 19, 20);
         
         // Calculate overall curl (average of all fingers except pinky)
         const overallCurl = (thumbCurl + indexCurl + middleCurl + ringCurl) / 4;
@@ -350,6 +435,16 @@ class HandTracker {
         const isVictory = indexCurl < 0.3 && middleCurl < 0.3 && ringCurl > 0.6 && thumbCurl > 0.4;
         const isThumbsUp = thumbCurl < 0.3 && indexCurl > 0.6 && middleCurl > 0.6 && ringCurl > 0.6;
         
+        // Count extended fingers for oscillator control - more reliable detection
+        const extendedFingers = [];
+        if (thumbCurl < 0.4) extendedFingers.push('thumb');
+        if (indexCurl < 0.4) extendedFingers.push('index');
+        if (middleCurl < 0.4) extendedFingers.push('middle');
+        if (ringCurl < 0.4) extendedFingers.push('ring');
+        if (pinkyCurl < 0.4) extendedFingers.push('pinky');
+        
+        const extendedFingerCount = extendedFingers.length;
+        
         return {
             landmarks: this.smoothedLandmarks,
             height: handHeight,
@@ -362,6 +457,7 @@ class HandTracker {
                 index: indexCurl,
                 middle: middleCurl,
                 ring: ringCurl,
+                pinky: pinkyCurl,
                 overall: overallCurl
             },
             velocity: handVelocity,
@@ -370,6 +466,10 @@ class HandTracker {
                 isClosed,
                 isVictory,
                 isThumbsUp
+            },
+            fingers: {
+                extended: extendedFingers,
+                count: extendedFingerCount
             }
         };
     }

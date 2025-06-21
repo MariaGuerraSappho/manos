@@ -2,7 +2,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Manos by Maria Sappho</title>
+    <title> Parsec by Maria Sappho</title>
     <link rel="stylesheet" href="styles.css">
     <!-- Import Maps for modules -->
     <script type="importmap">
@@ -16,7 +16,10 @@
 <body>
     <div class="app-container">
         <header>
-            <h1>Manos</h1>
+            <h1 class="setup-only">PARSEC</h1>
+            <div class="performance-effects-header performance-only">
+                <div class="performance-effects-list"></div>
+            </div>
         </header>
         
         <main>
@@ -28,12 +31,28 @@
                         <video id="webcam" autoplay playsinline></video>
                         <canvas id="overlay"></canvas>
                         <div class="hand-status">Hand tracking: <span id="tracking-status">Initializing...</span></div>
-                        <div id="effect-feedback" class="effect-feedback"></div>
+                        <div id="effect-feedback" class="effect-feedback hidden"></div>
                         <div id="gesture-feedback" class="gesture-feedback"></div>
                         <div id="video-permission" class="permission-prompt">
-                            <p>Please allow camera and microphone access to use this app</p>
-                            <p>This app needs camera access for hand tracking and microphone for audio input.</p>
-                            <button id="enable-camera">Enable Camera & Microphone</button>
+                            <p>Please enable camera access to use hand tracking</p>
+                            <button id="enable-camera">Enable Camera</button>
+                        </div>
+                        <div class="effect-quick-select-overlay">
+                            <div class="quick-select-title">Effects</div>
+                            <div class="effect-quick-buttons">
+                                <button class="effect-quick-btn" data-effect="filter">Filter</button>
+                                <button class="effect-quick-btn" data-effect="delay">Delay</button>
+                                <button class="effect-quick-btn" data-effect="reverb">Reverb</button>
+                                <button class="effect-quick-btn" data-effect="distortion">Dist</button>
+                                <button class="effect-quick-btn" data-effect="chorus">Chorus</button>
+                                <button class="effect-quick-btn" data-effect="pitchShift">Pitch</button>
+                                <button class="effect-quick-btn" data-effect="eq">EQ</button>
+                                <button class="effect-quick-btn" data-effect="panner">Pan</button>
+                                <button class="effect-quick-btn" data-effect="vibrato">Vibrato</button>
+                                <button class="effect-quick-btn" data-effect="phaser">Phaser</button>
+                                <button class="effect-quick-btn" data-effect="tremolo">Tremolo</button>
+                                <button class="effect-quick-btn" data-effect="bitCrusher">Bit Cr</button>
+                            </div>
                         </div>
                     </div>
                     
@@ -42,10 +61,21 @@
                             <h2>Audio Source</h2>
                             <div class="source-buttons">
                                 <button id="noise-btn" class="source-btn">Pink Noise</button>
+                                <button id="osc-btn" class="source-btn">Oscillators</button>
                                 <button id="mic-btn" class="source-btn">Microphone</button>
                                 <button id="file-btn" class="source-btn">Upload Files</button>
                                 <input type="file" id="audio-upload" accept="audio/*" multiple style="display: none;">
                             </div>
+                            
+                            <!-- Add oscillator pitch control -->
+                            <div id="oscillator-controls" class="oscillator-controls hidden">
+                                <h3>Oscillator Pitch</h3>
+                                <div class="pitch-control">
+                                    <input type="range" id="oscillator-pitch" min="-12" max="12" value="0" step="1" class="pitch-slider">
+                                    <div class="pitch-value-display">0 semitones</div>
+                                </div>
+                            </div>
+                            
                             <div id="file-browser" class="file-browser hidden">
                                 <h3>Uploaded Files</h3>
                                 <div id="file-list"></div>
@@ -63,21 +93,22 @@
                                         <option value="">Loading speakers...</option>
                                     </select>
                                 </div>
+                                <div class="selector-group">
+                                    <label for="camera-select">Camera:</label>
+                                    <select id="camera-select" disabled>
+                                        <option value="">Loading cameras...</option>
+                                    </select>
+                                </div>
                             </div>
                             
                             <!-- Baseline volume control -->
                             <div class="volume-control">
                                 <h3>Baseline Volume</h3>
-                                <p>Set your preferred volume when your hand is at a comfortable distance from the camera.</p>
-                                <div class="test-volume-controls">
-                                    <button id="test-tone-btn" class="control-btn">Play Test Tone</button>
-                                    <button id="test-min-volume-btn" class="control-btn">Test Minimum</button>
-                                    <button id="test-max-volume-btn" class="control-btn">Test Maximum</button>
-                                </div>
+                                <p>Hold your hand at a comfortable distance and adjust the volume slider until you hear sound at your preferred level.</p>
                                 <input type="range" id="baseline-volume" class="volume-slider" min="-30" max="6" value="-10" step="1">
                                 <div id="volume-display">-10 dB</div>
                                 <div id="volume-test-status" class="volume-test-status">
-                                    Adjust the slider while listening to the test tone to set your preferred baseline volume
+                                    Hold your hand at a comfortable distance and move the slider to adjust baseline volume
                                 </div>
                             </div>
                             
@@ -85,7 +116,6 @@
                                 <button id="play-btn" class="control-btn">Play</button>
                                 <button id="stop-btn" class="control-btn">Stop</button>
                             </div>
-                            <div id="setup-stopped-indicator" class="stopped-indicator visible">Audio stopped. Press Play to enable hand control.</div>
                         </div>
                         
                         <div class="start-performance-container">
@@ -93,27 +123,59 @@
                         </div>
                     </div>
                 </div>
+                
+                <!-- Add microphone meter containers to both views -->
+                <div class="mic-meter-container hidden">
+                    <div class="mic-meter-label">Microphone Level</div>
+                    <div class="mic-meter">
+                        <div class="mic-meter-fill"></div>
+                    </div>
+                </div>
             </div>
             
             <!-- Performance mode controls -->
             <div id="performance-mode" class="mode-container">
                 <div class="performance-layout">
-                    <!-- Video container cloned for performance mode -->
+                    <!-- Video container cloned for performance mode - remove duplicate effect panel -->
                     <div class="video-container">
                         <!-- These elements will be moved from setup to performance via JS, not duplicated -->
+                        <!-- Add randomize button overlay -->
+                        <div class="performance-randomize-btn-overlay">
+                            <button id="performance-randomize-btn" class="overlay-btn">Randomize Effects</button>
+                        </div>
+                    </div>
+                    
+                    <!-- Add enhanced playback controls -->
+                    <div class="enhanced-playback-controls">
+                        <button id="enhanced-play-btn" class="control-btn">▶</button>
+                        <button id="enhanced-stop-btn" class="control-btn">■</button>
                     </div>
                     
                     <div class="performance-controls">
+                        <div class="panel-customizer">
+                            <button id="customize-panels-btn" class="control-btn">Customize Panels</button>
+                        </div>
                         <div class="performance-source-controls">
                             <h3>Audio Source</h3>
                             <div class="performance-source-buttons">
                                 <button id="performance-noise-btn" class="source-btn">Pink Noise</button>
+                                <button id="performance-osc-btn" class="source-btn">Oscillators</button>
                                 <button id="performance-mic-btn" class="source-btn">Microphone</button>
                                 <button id="performance-file-btn" class="source-btn">Audio Files</button>
+                                <button id="performance-next-file-btn" class="control-btn">Next File</button>
+                            </div>
+                            
+                            <!-- Add oscillator pitch control for performance mode -->
+                            <div id="performance-oscillator-controls" class="oscillator-controls hidden">
+                                <h3>Oscillator Pitch</h3>
+                                <div class="pitch-control">
+                                    <input type="range" id="performance-oscillator-pitch" min="-12" max="12" value="0" step="1" class="pitch-slider">
+                                    <div class="pitch-value-display">0 semitones</div>
+                                </div>
                             </div>
                             
                             <div id="performance-file-controls" class="performance-file-controls">
-                                <button id="performance-next-file-btn" class="control-btn">Next File</button>
+                                <!-- Remove the next file button from here -->
                             </div>
                             
                             <!-- New Chaos Control -->
@@ -126,38 +188,199 @@
                                 </div>
                             </div>
                             
+                            <!-- Compressor Controls -->
+                            <div class="compressor-controls">
+                                <h3>Compressor Settings</h3>
+                                <div class="compressor-sliders">
+                                    <div class="compressor-slider-group">
+                                        <label for="compressor-threshold">Threshold</label>
+                                        <input type="range" id="compressor-threshold" min="-60" max="-10" value="-30" class="compressor-slider">
+                                        <span class="compressor-value" id="threshold-value">-30 dB</span>
+                                    </div>
+                                    <div class="compressor-slider-group">
+                                        <label for="compressor-ratio">Ratio</label>
+                                        <input type="range" id="compressor-ratio" min="1" max="20" value="6" class="compressor-slider">
+                                        <span class="compressor-value" id="ratio-value">6:1</span>
+                                    </div>
+                                    <div class="compressor-slider-group">
+                                        <label for="compressor-attack">Attack</label>
+                                        <input type="range" id="compressor-attack" min="1" max="100" value="5" class="compressor-slider">
+                                        <span class="compressor-value" id="attack-value">5 ms</span>
+                                    </div>
+                                    <div class="compressor-slider-group">
+                                        <label for="compressor-release">Release</label>
+                                        <input type="range" id="compressor-release" min="10" max="1000" value="100" class="compressor-slider">
+                                        <span class="compressor-value" id="release-value">100 ms</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Add new dry/wet mixer control -->
+                            <div class="drywet-control">
+                                <h3>Dry/Wet Mix</h3>
+                                <input type="range" id="drywet-level" class="drywet-slider" min="0" max="100" value="100" step="1">
+                                <div class="drywet-labels">
+                                    <span>Dry (Original)</span>
+                                    <span>Wet (Processed)</span>
+                                </div>
+                                <div class="drywet-value" id="drywet-value">100% Wet</div>
+                            </div>
+                            
+                            <!-- Effect Selection Container -->
+                            <div class="effect-selection-container panel-hidden">
+                                <!-- This section is now hidden by default and can be toggled via panel customizer -->
+                                <h3>Select Effects</h3>
+                                <p class="effect-selection-help">Choose which effects to include in random mappings</p>
+                                <div class="effect-checkboxes">
+                                    <div class="effect-checkbox-item">
+                                        <input type="checkbox" id="effect-filter" class="effect-checkbox" data-effect="filter" checked>
+                                        <label for="effect-filter">Filter</label>
+                                    </div>
+                                    <div class="effect-checkbox-item">
+                                        <input type="checkbox" id="effect-delay" class="effect-checkbox" data-effect="delay" checked>
+                                        <label for="effect-delay">Delay</label>
+                                    </div>
+                                    <div class="effect-checkbox-item">
+                                        <input type="checkbox" id="effect-reverb" class="effect-checkbox" data-effect="reverb" checked>
+                                        <label for="effect-reverb">Reverb</label>
+                                    </div>
+                                    <div class="effect-checkbox-item">
+                                        <input type="checkbox" id="effect-distortion" class="effect-checkbox" data-effect="distortion" checked>
+                                        <label for="effect-distortion">Distortion</label>
+                                    </div>
+                                    <div class="effect-checkbox-item">
+                                        <input type="checkbox" id="effect-chorus" class="effect-checkbox" data-effect="chorus" checked>
+                                        <label for="effect-chorus">Chorus</label>
+                                    </div>
+                                    <div class="effect-checkbox-item">
+                                        <input type="checkbox" id="effect-pitchShift" class="effect-checkbox" data-effect="pitchShift" checked>
+                                        <label for="effect-pitchShift">Pitch</label>
+                                    </div>
+                                    <div class="effect-checkbox-item">
+                                        <input type="checkbox" id="effect-eq" class="effect-checkbox" data-effect="eq" checked>
+                                        <label for="effect-eq">EQ</label>
+                                    </div>
+                                    <div class="effect-checkbox-item">
+                                        <input type="checkbox" id="effect-panner" class="effect-checkbox" data-effect="panner" checked>
+                                        <label for="effect-panner">Pan</label>
+                                    </div>
+                                    <div class="effect-checkbox-item">
+                                        <input type="checkbox" id="effect-vibrato" class="effect-checkbox" data-effect="vibrato" checked>
+                                        <label for="effect-vibrato">Vibrato</label>
+                                    </div>
+                                    <div class="effect-checkbox-item">
+                                        <input type="checkbox" id="effect-phaser" class="effect-checkbox" data-effect="phaser" checked>
+                                        <label for="effect-phaser">Phaser</label>
+                                    </div>
+                                    <div class="effect-checkbox-item">
+                                        <input type="checkbox" id="effect-tremolo" class="effect-checkbox" data-effect="tremolo" checked>
+                                        <label for="effect-tremolo">Tremolo</label>
+                                    </div>
+                                    <div class="effect-checkbox-item">
+                                        <input type="checkbox" id="effect-bitCrusher" class="effect-checkbox" data-effect="bitCrusher" checked>
+                                        <label for="effect-bitCrusher">Bit Crush</label>
+                                    </div>
+                                </div>
+                                <div class="effect-selection-actions">
+                                    <button id="select-all-effects" class="effect-btn">Select All</button>
+                                    <button id="deselect-all-effects" class="effect-btn">Deselect All</button>
+                                </div>
+                            </div>
+                            
                             <div class="performance-effect-buttons">
                                 <button id="performance-randomize-btn">Randomize Effects</button>
                                 <button id="performance-save-btn">Save Settings</button>
+                                <button id="performance-load-btn">Load Settings</button>
+                            </div>
+                            
+                            <!-- Move performance-effects-list here -->
+                            <div class="performance-effects-display panel-hidden">
+                                <!-- Performance effects list will be added here dynamically -->
                             </div>
                             
                             <div class="performance-playback-controls">
                                 <button id="performance-play-btn" class="control-btn">Play</button>
                                 <button id="performance-stop-btn" class="control-btn">Stop</button>
                             </div>
-                            <div id="performance-stopped-indicator" class="stopped-indicator visible">Audio stopped. Press Play to enable hand control.</div>
-                        </div>
-                        
-                        <div class="performance-effects-display">
-                            <h3>Active Effects</h3>
-                            <!-- For displaying current mappings -->
-                            <div id="performance-active-mappings"></div>
-                            <div id="performance-effects-list" class="performance-effects-list"></div>
                         </div>
                         
                         <button id="exit-performance-btn" class="exit-performance-btn">EXIT PERFORMANCE</button>
+                    </div>
+                </div>
+                
+                <!-- Add microphone meter containers to both views -->
+                <div class="performance-mic-meter-container hidden">
+                    <div class="mic-meter-label">Microphone Level</div>
+                    <div class="mic-meter">
+                        <div class="mic-meter-fill"></div>
                     </div>
                 </div>
             </div>
         </main>
         
         <footer>
-            <p>Created by Maria Sappho | <span id="device-status">Optimized for desktop and iPad</span></p>
+            <p>Created by Maria Sappho  <span id="device-status"></span></p>
             <div class="gesture-help">
-                <p>Move your hands to control audio effects - Effects will display in the video preview</p>
-                <p><strong>Volume Control:</strong> Move hand closer/further from camera</p>
+                
+            </div>
+            <!-- Add audio meter to footer -->
+            <div class="audio-level-meter">
+                <div class="meter-label">Audio Level</div>
+                <div class="master-volume-control">
+                    <label for="master-volume">Master Volume:</label>
+                    <input type="range" id="master-volume" min="-60" max="0" value="0" step="1">
+                    <span class="master-volume-value">0 dB</span>
+                </div>
+                <div class="meter-bars">
+                    <div class="volume-bar" data-label="VOL">
+                        <div class="volume-fill"></div>
+                    </div>
+                    <div class="compression-bar" data-label="COMP">
+                        <div class="compression-fill"></div>
+                    </div>
+                </div>
             </div>
         </footer>
+    </div>
+
+    <!-- Add saved settings panel -->
+    <div id="saved-settings-panel" class="saved-settings-panel hidden">
+        <h3>Saved Settings</h3>
+        <div id="saved-settings-list" class="saved-settings-list"></div>
+        <div class="saved-settings-actions">
+            <button id="close-saved-settings" class="control-btn">Close</button>
+        </div>
+    </div>
+
+    <!-- Add panel customization interface -->
+    <div id="panel-customizer" class="panel-customizer-modal hidden">
+        <h3>Customize Your Interface</h3>
+        <p>Toggle panels on/off to customize your workspace</p>
+        <div class="panel-toggle-container">
+            <div class="panel-toggle-item">
+                <input type="checkbox" id="toggle-compressor" class="panel-toggle" checked>
+                <label for="toggle-compressor">Compressor Controls</label>
+            </div>
+            <div class="panel-toggle-item">
+                <input type="checkbox" id="toggle-effect-selection" class="panel-toggle" checked>
+                <label for="toggle-effect-selection">Effect Selection</label>
+            </div>
+            <div class="panel-toggle-item">
+                <input type="checkbox" id="toggle-chaos" class="panel-toggle" checked>
+                <label for="toggle-chaos">Chaos Control</label>
+            </div>
+            <div class="panel-toggle-item">
+                <input type="checkbox" id="toggle-drywet" class="panel-toggle" checked>
+                <label for="toggle-drywet">Dry/Wet Mixer</label>
+            </div>
+            <div class="panel-toggle-item">
+                <input type="checkbox" id="toggle-effects-display" class="panel-toggle" checked>
+                <label for="toggle-effects-display">Effects Display</label>
+            </div>
+        </div>
+        <div class="panel-customizer-actions">
+            <button id="close-panel-customizer" class="control-btn">Save & Close</button>
+        </div>
     </div>
 
     <!-- Load MediaPipe Hands -->
@@ -165,9 +388,9 @@
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
     
     <!-- Load application scripts -->
-    <script src="/js/handTracking.js" type="module"></script>
-    <script src="/js/audioEngine.js" type="module"></script>
-    <script src="/js/parameterMapper.js" type="module"></script>
-    <script src="/js/main.js" type="module"></script>
+    <script src="js/handTracking.js" type="module"></script>
+    <script src="js/audioEngine.js" type="module"></script>
+    <script src="js/parameterMapper.js" type="module"></script>
+    <script src="js/main.js" type="module"></script>
 </body>
 </html>
